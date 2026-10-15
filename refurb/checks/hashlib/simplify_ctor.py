@@ -83,6 +83,7 @@ def check_stmts(stmts: list[Statement], errors: list[Error]) -> None:
                 msg = f"Replace `{old}` with `{new}`"
 
                 errors.append(ErrorInfo.from_node(assignment, msg))
+                assignment = None
 
             case _:
                 assignment = None

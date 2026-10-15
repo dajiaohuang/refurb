@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from mypy.nodes import CallExpr, NameExpr, StrExpr
+from mypy.nodes import ArgKind, CallExpr, NameExpr
 
 from refurb.checks.common import stringify
 from refurb.checks.pathlib.util import is_pathlike
@@ -50,16 +50,31 @@ def check(node: CallExpr, errors: list[Error]) -> None:
                 *rest,
             ],
         ) if is_pathlike(arg):
-            mode = args = ""
+            if node.arg_kinds[1:].count(ArgKind.ARG_POS) > 5:
+                return
 
-            match rest:
-                case [StrExpr(value=value), *_]:
-                    mode = f'"{value}"'
-                    args = f", {mode}"
+            args: list[str] = []
+
+            for value, kind, name in zip(rest, node.arg_kinds[1:], node.arg_names[1:]):
+                if kind == ArgKind.ARG_POS:
+                    args.append(stringify(value))
+
+                elif kind == ArgKind.ARG_NAMED and name in (
+                    "mode",
+                    "buffering",
+                    "encoding",
+                    "errors",
+                    "newline",
+                ):
+                    args.append(f"{name}={stringify(value)}")
+
+                else:
+                    return
 
             inner = stringify(arg)
-            expr = inner if arg == node.args[0] else f"str({inner})"
+            old = stringify(node)
+            new = f"{inner}.open({', '.join(args)})"
 
-            msg = f"Replace `open({expr}{args})` with `{inner}.open({mode})`"
+            msg = f"Replace `{old}` with `{new}`"
 
             errors.append(ErrorInfo.from_node(open_node, msg))
